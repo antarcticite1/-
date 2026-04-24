@@ -1,0 +1,60 @@
+#include <stdio.h>
+#include <ctype.h>
+
+int isvowel(int c)
+{
+    c = tolower(c);
+    return (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'y');
+}
+
+int main()
+{
+    FILE *f;
+    char filename[100];
+    int c, total = 0, lines = 0, digits = 0, punct = 0, space = 0;
+    int letters = 0, lower = 0, upper = 0, vowel_count = 0, cons = 0;
+    
+    printf("Input name file: ");
+    scanf("%s", filename);
+    
+    f = fopen(filename, "r");
+    if (f == NULL)
+    {
+        printf("Error!\n");
+        return 1;
+    }
+    
+    while ((c = fgetc(f)) != EOF)
+    {
+        total++;
+        if (c == '\n') lines++;
+        if (isdigit(c)) digits++;
+        if (ispunct(c)) punct++;
+        if (isspace(c)) space++;
+        
+        if (isalpha(c))
+        {
+            letters++;
+            if (islower(c)) lower++;
+            if (isupper(c)) upper++;
+            if (isvowel(c)) vowel_count++;
+            else cons++;
+        }
+    }
+    
+    fclose(f);
+    
+    printf("\nResults:\n");
+    printf("Total number of characters: %d\n", total);
+    printf("Number of lines: %d\n", lines);
+    printf("Number of digits: %d\n", digits);
+    printf("Number of punctuation marks: %d\n", punct);
+    printf("Number of whitespace characters: %d\n", space);
+    printf("Number of letters: %d\n", letters);
+    printf("  which lowercase: %d\n", lower);
+    printf("  which uppercase: %d\n", upper);
+    printf("Number of vowels: %d\n", vowel_count);
+    printf("Number of cons: %d\n", cons);
+    
+    return 0;
+}
