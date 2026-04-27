@@ -1,0 +1,153 @@
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct word {
+    int count;
+    char *w;
+} WORD;
+
+WORD *words[100000];
+int totalw = 0;
+
+
+char *getword(FILE *F) {
+    static char buffer[1000];
+    int c;
+    int i = 0;
+    int started = 0;
+    
+    while ((c = fgetc(F)) != EOF) {
+        if (isalpha(c)) {
+            started = 1;
+            buffer[i++] = tolower(c);
+        } else if (started && isalnum(c)) {
+            buffer[i++] = tolower(c);
+        } else if (started) {
+            buffer[i] = '\0';
+            return buffer;
+        }
+    }
+    
+    if (started) {
+        buffer[i] = '\0';
+        return buffer;
+    }
+    
+    return NULL;
+}
+
+// по алфавиту
+int cmpword_alpha(const void *a, const void *b) {
+    WORD *w1 = *(WORD **)a;
+    WORD *w2 = *(WORD **)b;
+    return strcmp(w1->w, w2->w);
+}
+
+// по убыванию
+int cmpword_quant(const void *a, const void *b) {
+    WORD *w1 = *(WORD **)a;
+    WORD *w2 = *(WORD **)b;
+    return w2->count - w1->count;
+}
+
+// поиск слов
+int findword(char *word) {
+    for (int i = 0; i < totalw; i++) {
+        if (strcmp(words[i]->w, word) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// + слова
+void addword(char *word) {
+    int idx = findword(word);
+    if (idx >= 0) {
+        words[idx]->count++;
+    } else {
+        words[totalw] = (WORD *)malloc(sizeof(WORD));
+        words[totalw]->w = (char *)malloc(strlen(word) + 1);
+        strcpy(words[totalw]->w, word);
+        words[totalw]->count = 1;
+        totalw++;
+    }
+}
+
+int main(int ac, char *av[]) {
+    FILE *IN, *OUT1, *OUT2;
+    char *pword;
+    char filepath[256];
+    
+    if (ac < 2) {
+        printf("Error!\n");
+        exit(0);
+    }
+    
+    
+    OUT1 = fopen("dict_alpha.txt", "w");
+    if (OUT1 == NULL) {
+        printf("Error of opening dict_alpha.txt\n");
+        exit(1);
+    }
+    
+    OUT2 = fopen("dict_quant.txt", "w");
+    if (OUT2 == NULL) {
+        printf("Error of opening dict_quant.txt\n");
+        fclose(OUT1);
+        exit(1);
+    }
+    
+    
+    for (int i = 1; i < ac; i++) {
+        snprintf(filepath, sizeof(filepath), "texts/%s", av[i]);
+        IN = fopen(filepath, "r");
+        
+        if (IN == NULL) {
+            printf("Error of opening %s\n", filepath);
+            continue;
+        }
+        
+        printf("File being processed %s\n", filepath);
+        
+        while ((pword = getword(IN)) != NULL) {
+            addword(pword);
+        }
+        
+        fclose(IN);
+    }
+    
+    
+    qsort(words, totalw, sizeof(WORD *), cmpword_alpha);
+    
+    fprintf(OUT1, "Dictionary (alphabetical):\n");
+    fprintf(OUT1, "================================\n");
+    for (int i = 0; i < totalw; i++) {
+        fprintf(OUT1, "%s: %d\n", words[i]->w, words[i]->count);
+    }
+    
+    // сортировка по частоте и вывод
+    qsort(words, totalw, sizeof(WORD *), cmpword_quant);
+    
+    fprintf(OUT2, "Frequency dictionary:\n");
+    fprintf(OUT2, "==============================\n");
+    for (int i = 0; i < totalw; i++) {
+        fprintf(OUT2, "%s: %d\n", words[i]->w, words[i]->count);
+    }
+    
+    fclose(OUT1);
+    fclose(OUT2);
+    
+    printf("\nTotal words: %d\n", totalw);
+    printf("The results are saved in files dict_alpha.txt и dict_quant.txt\n");
+    
+    
+    for (int i = 0; i < totalw; i++) {
+        free(words[i]->w);
+        free(words[i]);
+    }
+    
+    return 0;
+}
