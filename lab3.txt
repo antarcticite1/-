@@ -1,0 +1,263 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+typedef struct biblio {
+    char *author;
+    char *title;
+    char *publisher;
+    char *year;
+    struct biblio *left;
+    struct biblio *right;
+} BIBLIO;
+
+// (для cp1251)
+int my_strncmp(const char *s1, const char *s2, int n) {
+    for (int i = 0; i < n; i++) {
+        unsigned char c1 = (unsigned char)s1[i];
+        unsigned char c2 = (unsigned char)s2[i];
+        
+        // Приводим к нижнему регистру для латиницы
+        if (c1 >= 'A' && c1 <= 'Z') c1 = c1 - 'A' + 'a';
+        if (c2 >= 'A' && c2 <= 'Z') c2 = c2 - 'A' + 'a';
+        
+        if (c1 < c2) return -1;
+        if (c1 > c2) return 1;
+        if (c1 == '\0') return 0;
+    }
+    return 0;
+}
+
+
+BIBLIO *create_node(char *author, char *title, char *publisher, char *year) {
+    BIBLIO *node = (BIBLIO *)malloc(sizeof(BIBLIO));
+    if (node == NULL) {
+        printf("Cannot allocate memory\n");
+        exit(0);
+    }
+    
+    node->author = strdup(author);
+    node->title = strdup(title);
+    node->publisher = strdup(publisher);
+    node->year = strdup(year);
+    node->left = NULL;
+    node->right = NULL;
+    
+    return node;
+}
+
+
+int compare_entries(BIBLIO *node, char *author, char *title) {
+    int cmp = my_strncmp(node->author, author, strlen(author));
+    if (cmp != 0) return cmp;
+    
+    return my_strncmp(node->title, title, strlen(title));
+}
+
+
+BIBLIO *tree_insert(BIBLIO *root, char *author, char *title, char *publisher, char *year) {
+    if (root == NULL) {
+        return create_node(author, title, publisher, year);
+    }
+    
+    int cmp = compare_entries(root, author, title);
+    
+    if (cmp > 0) {
+        root->left = tree_insert(root->left, author, title, publisher, year);
+    } else if (cmp < 0) {
+        root->right = tree_insert(root->right, author, title, publisher, year);
+    }
+    
+    return root;
+}
+
+
+BIBLIO *tree_find_by_author(BIBLIO *root, char *author_prefix) {
+    if (root == NULL) return NULL;
+    
+    int cmp = my_strncmp(root->author, author_prefix, 5);
+    
+    if (cmp == 0) {
+        return root;
+    } else if (cmp > 0) {
+        return tree_find_by_author(root->left, author_prefix);
+    } else {
+        return tree_find_by_author(root->right, author_prefix);
+    }
+}
+
+
+void tree_print(BIBLIO *root, FILE *out) {
+    if (root != NULL) {
+        tree_print(root->left, out);
+        fprintf(out, "Author: %s\n", root->author);
+        fprintf(out, "Title: %s\n", root->title);
+        fprintf(out, "Publisher: %s\n", root->publisher);
+        fprintf(out, "Year: %s\n", root->year);
+        fprintf(out, "\n");
+        tree_print(root->right, out);
+    }
+}
+
+
+void tree_free(BIBLIO *root) {
+    if (root != NULL) {
+        tree_free(root->left);
+        tree_free(root->right);
+        free(root->author);
+        free(root->title);
+        free(root->publisher);
+        free(root->year);
+        free(root);
+    }
+}
+
+
+char *extract_field(char *line, char *field) {
+    static char value[1000];
+    char *start, *end;
+    char pattern[100];
+    
+    sprintf(pattern, "%s", field);
+    start = strstr(line, pattern);
+    if (start == NULL) return NULL;
+    
+    start = strchr(start, '=');
+    if (start == NULL) return NULL;
+    start++;
+    
+    while (*start == ' ' || *start == '\t') start++;
+    
+    if (*start == '{') {
+        start++;
+        end = strchr(start, '}');
+    } else if (*start == '"') {
+        start++;
+        end = strchr(start, '"');
+    } else {
+        end = strchr(start, ',');
+        if (end == NULL) end = strchr(start, '}');
+    }
+    
+    if (end == NULL) return NULL;
+    
+    int len = end - start;
+    if (len >= 1000) len = 999;
+    
+    strncpy(value, start, len);
+    value[len] = '\0';
+    
+    return value;
+}
+
+
+void parse_bib_file(FILE *in, BIBLIO **root) {
+    char line[2000];
+    char author[500] = "";
+    char title[500] = "";
+    char publisher[500] = "";
+    char year[50] = "";
+    int in_entry = 0;
+    
+    while (fgets(line, sizeof(line), in)) {
+        
+        line[strcspn(line, "\r\n")] = 0;
+        
+        
+        if (strstr(line, "@book") || strstr(line, "@article") || strstr(line, "@inproceedings")) {
+            in_entry = 1;
+            author[0] = '\0';
+            title[0] = '\0';
+            publisher[0] = '\0';
+            year[0] = '\0';
+        }
+        
+        if (in_entry) {
+            char *field;
+            
+            field = extract_field(line, "author");
+            if (field) strcpy(author, field);
+            
+            field = extract_field(line, "title");
+            if (field) strcpy(title, field);
+            
+            field = extract_field(line, "publisher");
+            if (field) strcpy(publisher, field);
+            
+            field = extract_field(line, "year");
+            if (field) strcpy(year, field);
+            
+            // Конец записи
+            if (strstr(line, "}") && (author[0] || title[0])) {
+                if (author[0] && title[0]) {
+                    *root = tree_insert(*root, author, title, publisher, year);
+                }
+                in_entry = 0;
+            }
+        }
+    }
+}
+
+int main(int argc, char *argv[]) {
+    BIBLIO *root = NULL;
+    FILE *out;
+    char search_author[100];
+    
+    if (argc < 2) {
+        printf("Usage: %s <file1.bib> [file2.bib ...]\n", argv[0]);
+        return 1;
+    }
+    
+    
+    for (int i = 1; i < argc; i++) {
+        FILE *in = fopen(argv[i], "r");
+        if (in == NULL) {
+            printf("Cannot open file: %s\n", argv[i]);
+            continue;
+        }
+        
+        printf("Processing file: %s\n", argv[i]);
+        parse_bib_file(in, &root);
+        fclose(in);
+    }
+    
+    
+    out = fopen("bibliography.txt", "w");
+    if (out == NULL) {
+        printf("Cannot create output file\n");
+        return 1;
+    }
+    
+    
+    fprintf(out, "=== SORTED BIBLIOGRAPHY ===\n\n");
+    tree_print(root, out);
+    fclose(out);
+    
+    printf("\nResults saved to bibliography.txt\n");
+    
+    
+    printf("\nEnter first 5 characters of author name to search (or 'q' to quit): ");
+    while (fgets(search_author, sizeof(search_author), stdin)) {
+        search_author[strcspn(search_author, "\r\n")] = 0;
+        
+        if (strcmp(search_author, "q") == 0) break;
+        
+        BIBLIO *found = tree_find_by_author(root, search_author);
+        if (found) {
+            printf("Found:\n");
+            printf("  Author: %s\n", found->author);
+            printf("  Title: %s\n", found->title);
+            printf("  Publisher: %s\n", found->publisher);
+            printf("  Year: %s\n", found->year);
+        } else {
+            printf("Not found\n");
+        }
+        printf("\nEnter first 5 characters of author name to search (or 'q' to quit): ");
+    }
+    
+    
+    tree_free(root);
+    
+    return 0;
+}
