@@ -1,0 +1,117 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define COL_WIDTH 25
+
+
+int is_rus(unsigned char c) {
+    return (c >= 0xC0 && c <= 0xFF) || c == 0xA8 || c == 0xB8;
+}
+
+
+const char* get_tr(unsigned char c) {
+    switch(c) {
+        case 0xC0: return "A";  case 0xE0: return "a";
+        case 0xC1: return "B";  case 0xE1: return "b";
+        case 0xC2: return "V";  case 0xE2: return "v";
+        case 0xC3: return "G";  case 0xE3: return "g";
+        case 0xC4: return "D";  case 0xE4: return "d";
+        case 0xC5: return "E";  case 0xE5: return "e";
+        case 0xA8: return "Yo"; case 0xB8: return "yo";
+        case 0xC6: return "Zh"; case 0xE6: return "zh";
+        case 0xC7: return "Z";  case 0xE7: return "z";
+        case 0xC8: return "I";  case 0xE8: return "i";
+        case 0xC9: return "Y";  case 0xE9: return "y";
+        case 0xCA: return "K";  case 0xEA: return "k";
+        case 0xCB: return "L";  case 0xEB: return "l";
+        case 0xCC: return "M";  case 0xEC: return "m";
+        case 0xCD: return "N";  case 0xED: return "n";
+        case 0xCE: return "O";  case 0xEE: return "o";
+        case 0xCF: return "P";  case 0xEF: return "p";
+        case 0xD0: return "R";  case 0xF0: return "r";
+        case 0xD1: return "S";  case 0xF1: return "s";
+        case 0xD2: return "T";  case 0xF2: return "t";
+        case 0xD3: return "U";  case 0xF3: return "u";
+        case 0xD4: return "F";  case 0xF4: return "f";
+        case 0xD5: return "H";  case 0xF5: return "h";
+        case 0xD6: return "Ts"; case 0xF6: return "ts";
+        case 0xD7: return "Ch"; case 0xF7: return "ch";
+        case 0xD8: return "Sh"; case 0xF8: return "sh";
+        case 0xD9: return "Shch"; case 0xF9: return "shch";
+        case 0xDA: return "''"; case 0xFA: return "''";
+        case 0xDB: return "Y";  case 0xFB: return "y";
+        case 0xDC: return "'";  case 0xFC: return "'";
+        case 0xDD: return "E";  case 0xFD: return "e";
+        case 0xDE: return "Yu"; case 0xFE: return "yu";
+        case 0xDF: return "Ya"; case 0xFF: return "ya";
+        default: return NULL;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("Usage: %s <file1.txt> [file2.txt] ...\n", argv[0]);
+        return 1;
+    }
+
+    for (int i = 1; i < argc; i++) {
+        FILE *fin = fopen(argv[i], "rb"); // rb чтобы не ломать cp1251
+        if (!fin) { printf("Error open: %s\n", argv[i]); continue; }
+
+        char outname[256];
+        snprintf(outname, sizeof(outname), "translit_%s", argv[i]);
+        FILE *fout = fopen(outname, "wb");
+        if (!fout) { printf("Error create: %s\n", outname); fclose(fin); continue; }
+
+        char word[256];
+        int wlen = 0;
+        int c;
+
+        
+        while ((c = fgetc(fin)) != EOF) {
+            if (is_rus((unsigned char)c) || (c >= '0' && c <= '9')) {
+                if (wlen < 255) word[wlen++] = (char)c;
+            } else {
+                if (wlen > 0) {
+                    word[wlen] = '\0';
+                    char tr[512] = {0};
+                    int tr_len = 0, cnt = 0;
+
+                    for (int j = 0; j < wlen; j++) {
+                        const char *t = get_tr((unsigned char)word[j]);
+                        if (t) {
+                            int tl = strlen(t);
+                            if (tr_len + tl < 511) strcat(tr + tr_len, t), tr_len += tl;
+                        } else {
+                            if (tr_len < 511) tr[tr_len++] = word[j];
+                        }
+                        cnt++;
+                    }
+                    tr[tr_len] = '\0';
+                    // Выравнивание по правому краю столбца + количество символов
+                    fprintf(fout, "%*s %d\n", COL_WIDTH, tr, cnt);
+                    wlen = 0;
+                }
+            }
+        }
+       
+        if (wlen > 0) {
+            word[wlen] = '\0';
+            char tr[512] = {0};
+            int tr_len = 0, cnt = 0;
+            for (int j = 0; j < wlen; j++) {
+                const char *t = get_tr((unsigned char)word[j]);
+                if (t) { strcat(tr + tr_len, t); tr_len += strlen(t); }
+                else tr[tr_len++] = word[j];
+                cnt++;
+            }
+            fprintf(fout, "%*s %d\n", COL_WIDTH, tr, cnt);
+        }
+
+        fclose(fin);
+        fclose(fout);
+        printf("Done: %s -> %s\n", argv[i], outname);
+    }
+    return 0;
+}
