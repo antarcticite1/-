@@ -1,0 +1,107 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define COL_WIDTH 25
+
+typedef struct { const char *tr; unsigned char cp; } RevMap;
+
+
+RevMap dict[] = {
+    {"shch", 0xF9}, {"Shch", 0xD9}, {"yo", 0xB8}, {"Yo", 0xA8},
+    {"zh", 0xE6},   {"Zh", 0xC6},   {"ts", 0xF6}, {"Ts", 0xD6},
+    {"ch", 0xF7},   {"Ch", 0xD7},   {"sh", 0xF8}, {"Sh", 0xD8},
+    {"yu", 0xFE},   {"Yu", 0xDE},   {"ya", 0xFF}, {"Ya", 0xDF},
+    {"a",0xE0},{"A",0xC0},{"b",0xE1},{"B",0xC1},{"v",0xE2},{"V",0xC2},
+    {"g",0xE3},{"G",0xC3},{"d",0xE4},{"D",0xC4},{"e",0xE5},{"E",0xC5},
+    {"z",0xE7},{"Z",0xC7},{"i",0xE8},{"I",0xC8},{"y",0xE9},{"Y",0xC9},
+    {"k",0xEA},{"K",0xCA},{"l",0xEB},{"L",0xCB},{"m",0xEC},{"M",0xCC},
+    {"n",0xED},{"N",0xCD},{"o",0xEE},{"O",0xCE},{"p",0xEF},{"P",0xCF},
+    {"r",0xF0},{"R",0xD0},{"s",0xF1},{"S",0xD1},{"t",0xF2},{"T",0xD2},
+    {"u",0xF3},{"U",0xD3},{"f",0xF4},{"F",0xD4},{"h",0xF5},{"H",0xD5},
+    {"''",0xFA},{"''",0xDA},{"'",0xFC},{"'",0xDC}
+};
+int dict_size = sizeof(dict) / sizeof(dict[0]);
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("Usage: %s <file1.txt> [file2.txt] ...\n", argv[0]);
+        return 1;
+    }
+
+    for (int i = 1; i < argc; i++) {
+        FILE *fin = fopen(argv[i], "r");
+        if (!fin) { printf("Error open: %s\n", argv[i]); continue; }
+
+        char outname[256];
+        snprintf(outname, sizeof(outname), "ru_%s", argv[i]);
+        FILE *fout = fopen(outname, "wb");
+        if (!fout) { printf("Error create: %s\n", outname); fclose(fin); continue; }
+
+        char buf[512];
+        int blen = 0;
+        int c;
+
+        while ((c = fgetc(fin)) != EOF) {
+            if (isalpha(c) || isdigit(c)) {
+                if (blen < 511) buf[blen++] = (char)c;
+            } else {
+                if (blen > 0) {
+                    buf[blen] = '\0';
+                    char ru[256] = {0};
+                    int ru_len = 0, cnt = 0, pos = 0;
+
+                    while (pos < blen) {
+                        int matched = 0;
+
+                        for (int l = blen - pos; l > 0; l--) {
+                            for (int d = 0; d < dict_size; d++) {
+                                if (strncmp(buf + pos, dict[d].tr, l) == 0 && strlen(dict[d].tr) == l) {
+                                    if (ru_len < 255) ru[ru_len++] = (char)dict[d].cp;
+                                    pos += l; matched = 1; cnt++; break;
+                                }
+                            }
+                            if (matched) break;
+                        }
+                        if (!matched) {
+                            if (ru_len < 255) ru[ru_len++] = buf[pos];
+                            pos++; cnt++;
+                        }
+                    }
+                    ru[ru_len] = '\0';
+                    fprintf(fout, "%*s %d\n", COL_WIDTH, ru, cnt);
+                    blen = 0;
+                }
+            }
+        }
+
+        if (blen > 0) {
+            buf[blen] = '\0';
+            char ru[256] = {0};
+            int ru_len = 0, cnt = 0, pos = 0;
+            while (pos < blen) {
+                int matched = 0;
+                for (int l = blen - pos; l > 0; l--) {
+                    for (int d = 0; d < dict_size; d++) {
+                        if (strncmp(buf + pos, dict[d].tr, l) == 0 && strlen(dict[d].tr) == l) {
+                            if (ru_len < 255) ru[ru_len++] = (char)dict[d].cp;
+                            pos += l; matched = 1; cnt++; break;
+                        }
+                    }
+                    if (matched) break;
+                }
+                if (!matched) {
+                    if (ru_len < 255) ru[ru_len++] = buf[pos];
+                    pos++; cnt++;
+                }
+            }
+            fprintf(fout, "%*s %d\n", COL_WIDTH, ru, cnt);
+        }
+
+        fclose(fin);
+        fclose(fout);
+        printf("Done: %s -> %s\n", argv[i], outname);
+    }
+    return 0;
+}
