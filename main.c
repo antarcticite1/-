@@ -1,33 +1,23 @@
-/*Создать текстовый файл с записями следующего вида:
-Иванов Петр Сергеевич 1975
-Сидоров Николай Андреевич 1981
-….
-Воробьянинов Ипполит Матвеевич 1978
-
-	Прочитать данные из этого файла и записать в другой только те строки, которые относятся к родившимся позднее 1980 год*/
-
 #include <stdio.h>
-#include <string.h>
-
+#include "triangle.h"
 
 int main() {
-    FILE *input, *output;
-    char line[256];
-    char lastname[50], name[50], middlename[50];
-    int year;
+    double a, b, c;
     
-    input = fopen("input.txt", "r");
-    output = fopen("result.txt", "w");
-
-    while (fgets(line, sizeof(line), input) != NULL) {
-        sscanf(line, "%s %s %s %d", lastname, name, middlename, &year);
-        if (year > 1980 && (strcmp(name, "Nikolay") == 0 || strcmp(name, "Alexander") == 0)) {
-            fprintf(output, "%s %s %s %d\n", lastname, name, middlename, year);
-        }
+    printf("Enter three sides of the triangle:\n");
+    printf("a = ");
+    scanf("%lf", &a);
+    printf("b = ");
+    scanf("%lf", &b);
+    printf("c = ");
+    scanf("%lf", &c);
+    
+    if (check_triangle(a, b, c)) {
+        printf("\nPerimeter: %.2lf\n", perimeter(a, b, c));
+        printf("Area: %.2lf\n", area(a, b, c));
+    } else {
+        printf("\nDon't exist\n");
     }
-
-    fclose(input);
-    fclose(output);
     
     return 0;
 }
